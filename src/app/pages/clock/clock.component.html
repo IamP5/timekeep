@@ -1,0 +1,156 @@
+<div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 p-4 md:p-8">
+  <div class="max-w-2xl mx-auto space-y-6">
+    <!-- Header -->
+    <div class="text-center space-y-2">
+      <h1 class="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
+        TimeKeep
+      </h1>
+      <p class="text-slate-600 dark:text-slate-400">
+        {{ formatDate(currentTime()) }}
+      </p>
+      <p class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">
+        {{ formatTime(currentTime()) }}
+      </p>
+    </div>
+
+    <!-- Main Clock Button -->
+    <div class="relative">
+      <button
+        (click)="onToggleClock()"
+        class="w-full aspect-square max-w-md mx-auto flex flex-col items-center justify-center rounded-3xl transition-all duration-300 transform hover:scale-[1.02] active:scale-[0.98] shadow-2xl"
+        [class.bg-gradient-to-br]="true"
+        [class.from-emerald-500]="!isClockedIn()"
+        [class.to-emerald-600]="!isClockedIn()"
+        [class.from-rose-500]="isClockedIn()"
+        [class.to-rose-600]="isClockedIn()"
+      >
+        <!-- Clock Icon -->
+        <div class="mb-4">
+          @if (isClockedIn()) {
+            <z-icon zType="log-out" class="w-24 h-24 text-white" />
+          } @else {
+            <z-icon zType="log-in" class="w-24 h-24 text-white" />
+          }
+        </div>
+
+        <!-- Action Text -->
+        <div class="text-white text-center">
+          <p class="text-3xl md:text-4xl font-bold mb-2">
+            @if (isClockedIn()) {
+              Clock Out
+            } @else {
+              Clock In
+            }
+          </p>
+          <p class="text-lg opacity-90">
+            Tap to {{ isClockedIn() ? 'end' : 'start' }} tracking
+          </p>
+        </div>
+
+        <!-- Current Session Timer (when clocked in) -->
+        @if (isClockedIn()) {
+          <div class="mt-6 text-white">
+            <p class="text-sm opacity-75 mb-1">Current Session</p>
+            <p class="text-2xl font-mono font-bold">
+              {{ formattedCurrentSession() }}
+            </p>
+          </div>
+        }
+      </button>
+
+      <!-- Pulse animation when clocked in -->
+      @if (isClockedIn()) {
+        <div class="absolute inset-0 max-w-md mx-auto rounded-3xl bg-rose-500 animate-ping opacity-20 pointer-events-none"></div>
+      }
+    </div>
+
+    <!-- Progress Card -->
+    <z-card class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-slate-200 dark:border-slate-800">
+      <div class="space-y-4">
+        <!-- Total Hours Today -->
+        <div class="text-center">
+          <p class="text-sm text-slate-600 dark:text-slate-400 mb-2">Total Hours Today</p>
+          <p class="text-5xl font-bold font-mono bg-gradient-to-r from-emerald-600 to-emerald-500 dark:from-emerald-400 dark:to-emerald-300 bg-clip-text text-transparent">
+            {{ formattedTotalHours() }}
+          </p>
+          <p class="text-sm text-slate-600 dark:text-slate-400 mt-2">
+            {{ statusMessage() }}
+          </p>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="space-y-2">
+          <div class="flex justify-between text-xs text-slate-600 dark:text-slate-400">
+            <span>0h</span>
+            <span>{{ targetHours() }}h target</span>
+          </div>
+          <div class="h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div
+              class="h-full transition-all duration-500 ease-out rounded-full"
+              [class.bg-gradient-to-r]="true"
+              [class.from-emerald-500]="progressPercentage() < 100"
+              [class.to-emerald-600]="progressPercentage() < 100"
+              [class.from-green-500]="progressPercentage() >= 100"
+              [class.to-green-600]="progressPercentage() >= 100"
+              [style.width.%]="progressPercentage()"
+            ></div>
+          </div>
+          <div class="text-center text-xs text-slate-600 dark:text-slate-400">
+            {{ progressPercentage().toFixed(0) }}% of daily target
+          </div>
+        </div>
+      </div>
+    </z-card>
+
+    <!-- Today's Sessions -->
+    @if (todaySessions().length > 0) {
+      <z-card
+        zTitle="Today's Sessions"
+        class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-slate-200 dark:border-slate-800"
+      >
+        <div class="space-y-3">
+          @for (session of todaySessions(); track session.clockIn) {
+            <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                  <z-icon zType="clock" class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    {{ formatTime(session.clockIn) }} - {{ session.clockOut ? formatTime(session.clockOut) : 'In progress' }}
+                  </p>
+                  <p class="text-xs text-slate-600 dark:text-slate-400">
+                    Duration: {{ formatDuration(session.duration) }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      </z-card>
+    }
+
+    <!-- Status Badge -->
+    <div class="flex justify-center">
+      <div
+        class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium"
+        [class.bg-emerald-100]="isClockedIn()"
+        [class.text-emerald-700]="isClockedIn()"
+        [class.dark:bg-emerald-900/30]="isClockedIn()"
+        [class.dark:text-emerald-400]="isClockedIn()"
+        [class.bg-slate-200]="!isClockedIn()"
+        [class.text-slate-700]="!isClockedIn()"
+        [class.dark:bg-slate-800]="!isClockedIn()"
+        [class.dark:text-slate-400]="!isClockedIn()"
+      >
+        <div
+          class="w-2 h-2 rounded-full"
+          [class.bg-emerald-500]="isClockedIn()"
+          [class.animate-pulse]="isClockedIn()"
+          [class.bg-slate-400]="!isClockedIn()"
+        ></div>
+        {{ isClockedIn() ? 'Tracking Active' : 'Not Tracking' }}
+      </div>
+    </div>
+  </div>
+</div>
