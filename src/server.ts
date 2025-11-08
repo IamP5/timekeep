@@ -5,6 +5,7 @@ import {
   writeResponseToNodeResponse,
 } from '@angular/ssr/node';
 import express from 'express';
+import compression from 'compression';
 import { join } from 'node:path';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
@@ -15,6 +16,12 @@ const angularApp = new AngularNodeAppEngine();
 /**
  * Security and Performance middleware
  */
+/* Enable gzip/brotli compression for all responses */
+app.use(compression({
+  threshold: 0, /* Compress all responses */
+  level: 6, /* Balance between speed and compression ratio */
+}));
+
 // Add security headers
 app.use((req, res, next) => {
   // Security headers
