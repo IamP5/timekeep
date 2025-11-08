@@ -167,7 +167,6 @@ export class TimeTrackingService {
       type: 'in'
     };
 
-    console.log('[TimeKeeping] Clocking in:', entry);
     this.entries.update(entries => [...entries, entry]);
   }
 
@@ -183,7 +182,6 @@ export class TimeTrackingService {
       type: 'out'
     };
 
-    console.log('[TimeKeeping] Clocking out:', entry);
     this.entries.update(entries => [...entries, entry]);
   }
 
@@ -233,7 +231,6 @@ export class TimeTrackingService {
 
     try {
       const stored = this.localStorage.getItem(STORAGE_KEY);
-      console.log('[TimeKeeping] Loading from localStorage, raw data:', stored);
 
       if (stored) {
         const parsed = JSON.parse(stored);
@@ -242,10 +239,8 @@ export class TimeTrackingService {
           ...e,
           timestamp: new Date(e.timestamp)
         }));
-        console.log(`[TimeKeeping] Loaded ${entries.length} entries from localStorage:`, entries);
         this.entries.set(entries);
       } else {
-        console.log('[TimeKeeping] No data found in localStorage');
       }
     } catch (error) {
       console.error('Error loading entries from storage:', error);
@@ -258,7 +253,6 @@ export class TimeTrackingService {
     try {
       const dataToSave = JSON.stringify(entries);
       this.localStorage.setItem(STORAGE_KEY, dataToSave);
-      console.log(`[TimeKeeping] Saved ${entries.length} entries to localStorage:`, entries);
     } catch (error) {
       console.error('Error saving entries to storage:', error);
     }

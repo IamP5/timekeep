@@ -11,6 +11,22 @@
       <p class="text-3xl md:text-4xl font-bold text-slate-900 dark:text-slate-100">
         {{ formatTime(currentTime()) }}
       </p>
+
+      <!-- iOS PWA Notification Permission Button -->
+      @if (showNotificationButton()) {
+        <div class="mt-4">
+          <button
+            (click)="onRequestNotifications()"
+            class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-medium transition-colors"
+          >
+            <z-icon zType="bell" class="w-4 h-4" />
+            Enable Notifications
+          </button>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">
+            Get notified when you reach your work hours target
+          </p>
+        </div>
+      }
     </div>
 
     <!-- Main Clock Button -->
@@ -64,93 +80,154 @@
       }
     </div>
 
-    <!-- Progress Card -->
-    <z-card class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-slate-200 dark:border-slate-800">
-      <div class="space-y-4">
-        <!-- Total Hours Today -->
-        <div class="text-center">
-          <p class="text-sm text-slate-600 dark:text-slate-400 mb-2">Total Hours Today</p>
-          <p class="text-5xl font-bold font-mono bg-gradient-to-r from-emerald-600 to-emerald-500 dark:from-emerald-400 dark:to-emerald-300 bg-clip-text text-transparent">
-            {{ formattedTotalHours() }}
-          </p>
-          <p class="text-sm text-slate-600 dark:text-slate-400 mt-2">
-            {{ statusMessage() }}
-          </p>
-        </div>
+    <!-- Progress Card - Incremental Hydration: Pre-rendered HTML, hydrate JS on viewport -->
+    @defer (hydrate on viewport; prefetch on idle) {
+      <z-card class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-slate-200 dark:border-slate-800">
+        <div class="space-y-4">
+          <!-- Total Hours Today -->
+          <div class="text-center">
+            <p class="text-sm text-slate-600 dark:text-slate-400 mb-2">Total Hours Today</p>
+            <p class="text-5xl font-bold font-mono bg-gradient-to-r from-emerald-600 to-emerald-500 dark:from-emerald-400 dark:to-emerald-300 bg-clip-text text-transparent">
+              {{ formattedTotalHours() }}
+            </p>
+            <p class="text-sm text-slate-600 dark:text-slate-400 mt-2">
+              {{ statusMessage() }}
+            </p>
+          </div>
 
-        <!-- Progress Bar -->
-        <div class="space-y-2">
-          <div class="flex justify-between text-xs text-slate-600 dark:text-slate-400">
-            <span>0h</span>
-            <span>{{ targetHours() }}h target</span>
-          </div>
-          <div class="h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-            <div
-              class="h-full transition-all duration-500 ease-out rounded-full"
-              [class.bg-gradient-to-r]="true"
-              [class.from-emerald-500]="progressPercentage() < 100"
-              [class.to-emerald-600]="progressPercentage() < 100"
-              [class.from-green-500]="progressPercentage() >= 100"
-              [class.to-green-600]="progressPercentage() >= 100"
-              [style.width.%]="progressPercentage()"
-            ></div>
-          </div>
-          <div class="text-center text-xs text-slate-600 dark:text-slate-400">
-            {{ progressPercentage().toFixed(0) }}% of daily target
-          </div>
-        </div>
-      </div>
-    </z-card>
-
-    <!-- Today's Sessions -->
-    @if (todaySessions().length > 0) {
-      <z-card
-        zTitle="Today's Sessions"
-        class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-slate-200 dark:border-slate-800"
-      >
-        <div class="space-y-3">
-          @for (session of todaySessions(); track session.clockIn) {
-            <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
-              <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                  <z-icon zType="clock" class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                </div>
-                <div>
-                  <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
-                    {{ formatTime(session.clockIn) }} - {{ session.clockOut ? formatTime(session.clockOut) : 'In progress' }}
-                  </p>
-                  <p class="text-xs text-slate-600 dark:text-slate-400">
-                    Duration: {{ formatDuration(session.duration) }}
-                  </p>
-                </div>
-              </div>
+          <!-- Progress Bar -->
+          <div class="space-y-2">
+            <div class="flex justify-between text-xs text-slate-600 dark:text-slate-400">
+              <span>0h</span>
+              <span>{{ targetHours() }}h target</span>
             </div>
-          }
+            <div class="h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+              <div
+                class="h-full transition-all duration-500 ease-out rounded-full"
+                [class.bg-gradient-to-r]="true"
+                [class.from-emerald-500]="progressPercentage() < 100"
+                [class.to-emerald-600]="progressPercentage() < 100"
+                [class.from-green-500]="progressPercentage() >= 100"
+                [class.to-green-600]="progressPercentage() >= 100"
+                [style.width.%]="progressPercentage()"
+              ></div>
+            </div>
+            <div class="text-center text-xs text-slate-600 dark:text-slate-400">
+              {{ progressPercentage().toFixed(0) }}% of daily target
+            </div>
+          </div>
         </div>
       </z-card>
+    } @placeholder {
+      <!-- Placeholder: Only shown during CSR fallback, not needed with hydrate mode -->
+      <div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border border-slate-200 dark:border-slate-800 rounded-lg p-6">
+        <div class="space-y-4">
+          <div class="text-center space-y-3">
+            <z-skeleton class="h-4 w-32 mx-auto" />
+            <z-skeleton class="h-12 w-40 mx-auto" />
+            <z-skeleton class="h-4 w-36 mx-auto" />
+          </div>
+          <div class="space-y-2">
+            <div class="flex justify-between">
+              <z-skeleton class="h-3 w-8" />
+              <z-skeleton class="h-3 w-20" />
+            </div>
+            <z-skeleton class="h-3 w-full rounded-full" />
+          </div>
+        </div>
+      </div>
+    } @loading (minimum 100ms) {
+      <!-- Loading state: Only for hydration JS download -->
+      <div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border border-slate-200 dark:border-slate-800 rounded-lg p-6">
+        <div class="flex items-center justify-center">
+          <z-loader zSize="lg" />
+        </div>
+      </div>
     }
 
-    <!-- Status Badge -->
-    <div class="flex justify-center">
-      <div
-        class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium"
-        [class.bg-emerald-100]="isClockedIn()"
-        [class.text-emerald-700]="isClockedIn()"
-        [class.dark:bg-emerald-900/30]="isClockedIn()"
-        [class.dark:text-emerald-400]="isClockedIn()"
-        [class.bg-slate-200]="!isClockedIn()"
-        [class.text-slate-700]="!isClockedIn()"
-        [class.dark:bg-slate-800]="!isClockedIn()"
-        [class.dark:text-slate-400]="!isClockedIn()"
-      >
+    <!-- Today's Sessions - Incremental Hydration: Pre-rendered HTML, hydrate JS on viewport -->
+    @if (todaySessions().length > 0) {
+      @defer (hydrate on viewport; prefetch on idle) {
+        <z-card
+          zTitle="Today's Sessions"
+          class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-slate-200 dark:border-slate-800"
+        >
+          <div class="space-y-3">
+            @for (session of todaySessions(); track session.clockIn) {
+              <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                <div class="flex items-center gap-3">
+                  <div class="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                    <z-icon zType="clock" class="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div>
+                    <p class="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {{ formatTime(session.clockIn) }} - {{ session.clockOut ? formatTime(session.clockOut) : 'In progress' }}
+                    </p>
+                    <p class="text-xs text-slate-600 dark:text-slate-400">
+                      Duration: {{ formatDuration(session.duration) }}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        </z-card>
+      } @placeholder {
+        <!-- Placeholder: Only shown during CSR fallback -->
+        <div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border border-slate-200 dark:border-slate-800 rounded-lg p-6">
+          <div class="mb-4">
+            <z-skeleton class="h-5 w-32" />
+          </div>
+          <div class="space-y-3">
+            @for (i of [1, 2]; track i) {
+              <div class="flex items-center gap-3 p-3 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                <z-skeleton class="w-10 h-10 rounded-full" />
+                <div class="flex-1 space-y-2">
+                  <z-skeleton class="h-4 w-3/4" />
+                  <z-skeleton class="h-3 w-1/2" />
+                </div>
+              </div>
+            }
+          </div>
+        </div>
+      } @loading (minimum 100ms) {
+        <!-- Loading state: Only for hydration JS download -->
+        <div class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border border-slate-200 dark:border-slate-800 rounded-lg p-6">
+          <div class="flex items-center justify-center py-8">
+            <z-loader zSize="lg" />
+          </div>
+        </div>
+      }
+    }
+
+    <!-- Status Badge - Incremental Hydration: Pre-rendered HTML, hydrate JS on idle -->
+    @defer (hydrate on idle; prefetch on immediate) {
+      <div class="flex justify-center">
         <div
-          class="w-2 h-2 rounded-full"
-          [class.bg-emerald-500]="isClockedIn()"
-          [class.animate-pulse]="isClockedIn()"
-          [class.bg-slate-400]="!isClockedIn()"
-        ></div>
-        {{ isClockedIn() ? 'Tracking Active' : 'Not Tracking' }}
+          class="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium"
+          [class.bg-emerald-100]="isClockedIn()"
+          [class.text-emerald-700]="isClockedIn()"
+          [class.dark:bg-emerald-900/30]="isClockedIn()"
+          [class.dark:text-emerald-400]="isClockedIn()"
+          [class.bg-slate-200]="!isClockedIn()"
+          [class.text-slate-700]="!isClockedIn()"
+          [class.dark:bg-slate-800]="!isClockedIn()"
+          [class.dark:text-slate-400]="!isClockedIn()"
+        >
+          <div
+            class="w-2 h-2 rounded-full"
+            [class.bg-emerald-500]="isClockedIn()"
+            [class.animate-pulse]="isClockedIn()"
+            [class.bg-slate-400]="!isClockedIn()"
+          ></div>
+          {{ isClockedIn() ? 'Tracking Active' : 'Not Tracking' }}
+        </div>
       </div>
-    </div>
+    } @placeholder {
+      <!-- Placeholder: Only shown during CSR fallback -->
+      <div class="flex justify-center">
+        <z-skeleton class="h-9 w-32 rounded-full" />
+      </div>
+    }
   </div>
 </div>

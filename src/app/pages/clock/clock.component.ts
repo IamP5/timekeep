@@ -5,18 +5,24 @@ import { NotificationService } from '@app/core/services/notification.service';
 import { hoursToMilliseconds, millisecondsToHours } from '@app/core/config/work-hours.config';
 import { ZardCardComponent } from '@shared/components/card/card.component';
 import { ZardIconComponent } from '@shared/components/icon/icon.component';
+import { ZardSkeletonComponent } from '@shared/components/skeleton/skeleton.component';
+import { ZardLoaderComponent } from '@shared/components/loader/loader.component';
+import { WINDOW } from '@app/core/tokens/browser.tokens';
 
 @Component({
   selector: 'app-clock',
   imports: [
     CommonModule,
     ZardCardComponent,
-    ZardIconComponent
+    ZardIconComponent,
+    ZardSkeletonComponent,
+    ZardLoaderComponent
   ],
   templateUrl: './clock.component.html',
-  styleUrls: ['./clock.component.scss']
+  styleUrl: './clock.component.css'
 })
 export class ClockComponent {
+  private readonly window = inject(WINDOW);
   private timeTracking = inject(TimeTrackingService);
   private notificationService = inject(NotificationService);
 
@@ -91,14 +97,31 @@ export class ClockComponent {
     return 'Ready to start tracking';
   });
 
+  readonly showNotificationButton = signal(false);
+
   constructor() {
     // Update current time every second
     this.timeInterval = setInterval(() => {
       this.currentTime.set(new Date());
     }, 1000);
 
-    // Request notification permission on component init
-    this.notificationService.requestPermission();
+    // Note: Notification permission is now requested on first clock in (user interaction)
+    // This is required for iOS PWA compatibility
+
+    // Show notification button for manual permission request (helpful for iOS)
+    if (this.window && 'Notification' in this.window) {
+      const NotificationAPI = this.window.Notification as typeof Notification;
+      if (NotificationAPI.permission === 'default') {
+        this.showNotificationButton.set(true);
+      }
+    }
+  }
+
+  async onRequestNotifications(): Promise<void> {
+    const permission = await this.notificationService.requestPermission();
+    if (permission === 'granted') {
+      this.showNotificationButton.set(false);
+    }
   }
 
   ngOnDestroy(): void {
@@ -110,15 +133,28 @@ export class ClockComponent {
   async onToggleClock(): Promise<void> {
     const wasClockedIn = this.isClockedIn();
 
-    this.timeTracking.toggleClock();
+    // If clocking in for the first time, request permission first
+    if (!wasClockedIn) {
+      const permission = await this.notificationService.requestPermission();
 
-    // Show notifications
-    if (wasClockedIn) {
+      // Hide the manual notification button if permission was granted
+      if (permission === 'granted') {
+        this.showNotificationButton.set(false);
+      }
+
+      // Now toggle the clock after permission is handled
+      this.timeTracking.toggleClock();
+
+      // Show clock in notification
+      await this.notificationService.showClockInNotification();
+    } else {
+      // Clocking out - toggle immediately
+      this.timeTracking.toggleClock();
+
+      // Show clock out notification
       await this.notificationService.showClockOutNotification(
         millisecondsToHours(this.timeTracking.totalWorkTimeToday())
       );
-    } else {
-      await this.notificationService.showClockInNotification();
     }
   }
 
