@@ -13,6 +13,24 @@ const app = express();
 const angularApp = new AngularNodeAppEngine();
 
 /**
+ * Security and Performance middleware
+ */
+// Add security headers
+app.use((req, res, next) => {
+  // Security headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+
+  // Enable CORS for service worker
+  res.setHeader('Cross-Origin-Embedder-Policy', 'credentialless');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+
+  next();
+});
+
+/**
  * Example Express Rest API endpoints can be defined here.
  * Uncomment and define endpoints as necessary.
  *
@@ -25,25 +43,44 @@ const angularApp = new AngularNodeAppEngine();
  */
 
 /**
- * Serve static files from /browser
+ * Serve static files from /browser with optimized caching
  */
 app.use(
   express.static(browserDistFolder, {
     maxAge: '1y',
     index: false,
     redirect: false,
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, path) => {
+      // Cache static assets aggressively
+      if (path.match(/\.(js|css|woff2?|ttf|otf|eot|svg|png|jpg|jpeg|gif|webp|ico)$/)) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+      // Cache HTML files with revalidation
+      else if (path.endsWith('.html')) {
+        res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+      }
+    }
   }),
 );
 
 /**
  * Handle all other requests by rendering the Angular application.
+ * This includes server-side rendering with hydration support.
  */
 app.use((req, res, next) => {
   angularApp
     .handle(req)
-    .then((response) =>
-      response ? writeResponseToNodeResponse(response, res) : next(),
-    )
+    .then((response) => {
+      if (response) {
+        // Add cache headers for SSR responses
+        const headers = response.headers;
+        headers.set('Cache-Control', 'public, max-age=60, stale-while-revalidate=86400');
+        return writeResponseToNodeResponse(response, res);
+      }
+      return next();
+    })
     .catch(next);
 });
 

@@ -5,6 +5,7 @@ import { serverRoutes } from './app.routes.server';
 
 const serverConfig: ApplicationConfig = {
   providers: [
+    // Enhanced SSR with pre-rendering for optimal performance
     provideServerRendering(withRoutes(serverRoutes))
   ]
 };

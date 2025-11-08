@@ -4,9 +4,13 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "dev:ssr": "ng serve",
     "build": "ng build",
+    "build:ssr": "ng build --configuration production",
+    "build:prerender": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
+    "serve:ssr": "node dist/timekeep/server/server.mjs",
     "serve:ssr:timekeep": "node dist/timekeep/server/server.mjs"
   },
   "prettier": {

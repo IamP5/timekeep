@@ -4,10 +4,10 @@ import {
   provideZonelessChangeDetection,
   isDevMode,
 } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, withInMemoryScrolling, withViewTransitions } from '@angular/router';
 
 import { routes } from './app.routes';
-import { provideClientHydration, withEventReplay } from '@angular/platform-browser';
+import { provideClientHydration, withEventReplay, withI18nSupport, withIncrementalHydration } from '@angular/platform-browser';
 import { provideServiceWorker } from '@angular/service-worker';
 import { WORK_HOURS_CONFIG, WorkHoursConfig } from './core/config/work-hours.config';
 
@@ -15,8 +15,22 @@ export const appConfig: ApplicationConfig = {
   providers: [
     provideBrowserGlobalErrorListeners(),
     provideZonelessChangeDetection(),
-    provideRouter(routes),
-    provideClientHydration(withEventReplay()),
+    // Enhanced router with view transitions and scroll restoration
+    provideRouter(
+      routes,
+      withViewTransitions(),
+      withInMemoryScrolling({
+        scrollPositionRestoration: 'enabled',
+        anchorScrolling: 'enabled'
+      })
+    ),
+    // Enhanced hydration with event replay and i18n support
+    // Note: Incremental hydration is automatically enabled with defer blocks in Angular 20+
+    provideClientHydration(
+      withIncrementalHydration(),
+      withEventReplay(),
+      withI18nSupport()
+    ),
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),
       registrationStrategy: 'registerWhenStable:30000',
