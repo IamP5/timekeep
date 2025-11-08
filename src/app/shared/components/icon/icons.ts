@@ -46,6 +46,7 @@ import {
   Palette,
   PanelLeft,
   Puzzle,
+  RefreshCw,
   Save,
   Search,
   Settings,
@@ -141,6 +142,7 @@ export const ZARD_ICONS = {
   monitor: Monitor,
   smartphone: Smartphone,
   tablet: Tablet,
+  'refresh-cw': RefreshCw,
 } as const satisfies Record<string, LucideIconData>;
 
 export declare type ZardIcon = keyof typeof ZARD_ICONS | LucideIconData;

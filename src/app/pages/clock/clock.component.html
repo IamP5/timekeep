@@ -2,9 +2,32 @@
   <div class="max-w-2xl mx-auto space-y-6">
     <!-- Header -->
     <div class="text-center space-y-2">
-      <h1 class="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
-        TimeKeep
-      </h1>
+      <div class="flex items-center justify-center gap-3">
+        <h1 class="text-4xl md:text-5xl font-bold tracking-tight bg-gradient-to-r from-slate-900 to-slate-700 dark:from-slate-100 dark:to-slate-300 bg-clip-text text-transparent">
+          TimeKeep
+        </h1>
+        <!-- Dark Mode Toggle -->
+        <button
+          (click)="onToggleTheme()"
+          class="p-2 rounded-lg bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
+          aria-label="Toggle dark mode"
+        >
+          @if (isDarkMode()) {
+            <z-icon zType="sun" class="w-5 h-5 text-slate-900 dark:text-slate-100" />
+          } @else {
+            <z-icon zType="moon" class="w-5 h-5 text-slate-900 dark:text-slate-100" />
+          }
+        </button>
+        <!-- Reset Today Button -->
+        <button
+          (click)="onResetToday()"
+          class="p-2 rounded-lg bg-rose-100 hover:bg-rose-200 dark:bg-rose-900/30 dark:hover:bg-rose-900/50 transition-colors"
+          aria-label="Reset today's data"
+          title="Reset today's time tracking"
+        >
+          <z-icon zType="refresh-cw" class="w-5 h-5 text-rose-600 dark:text-rose-400" />
+        </button>
+      </div>
       <p class="text-slate-600 dark:text-slate-400">
         {{ formatDate(currentTime()) }}
       </p>

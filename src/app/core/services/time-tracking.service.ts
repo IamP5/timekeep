@@ -287,4 +287,22 @@ export class TimeTrackingService {
 
     this.entries.set(todayEntries);
   }
+
+  /* Reset today's time tracking data */
+  resetTodayData(): void {
+    if (!this.localStorage) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const currentEntries = this.entries();
+    /* Keep only entries from previous days */
+    const previousDaysEntries = currentEntries.filter(entry => {
+      const entryDate = new Date(entry.timestamp);
+      entryDate.setHours(0, 0, 0, 0);
+      return entryDate.getTime() !== today.getTime();
+    });
+
+    this.entries.set(previousDaysEntries);
+  }
 }

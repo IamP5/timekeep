@@ -2,11 +2,13 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TimeTrackingService } from '@app/core/services/time-tracking.service';
 import { NotificationService } from '@app/core/services/notification.service';
+import { DarkModeService } from '@app/core/services/dark-mode.service';
 import { hoursToMilliseconds, millisecondsToHours } from '@app/core/config/work-hours.config';
 import { ZardCardComponent } from '@shared/components/card/card.component';
 import { ZardIconComponent } from '@shared/components/icon/icon.component';
 import { ZardSkeletonComponent } from '@shared/components/skeleton/skeleton.component';
 import { ZardLoaderComponent } from '@shared/components/loader/loader.component';
+import { ZardAlertDialogService } from '@shared/components/alert-dialog/alert-dialog.service';
 import { WINDOW } from '@app/core/tokens/browser.tokens';
 
 @Component({
@@ -25,6 +27,8 @@ export class ClockComponent {
   private readonly window = inject(WINDOW);
   private timeTracking = inject(TimeTrackingService);
   private notificationService = inject(NotificationService);
+  private darkModeService = inject(DarkModeService);
+  private alertDialogService = inject(ZardAlertDialogService);
 
   currentTime = signal(new Date());
   private timeInterval: any;
@@ -122,6 +126,28 @@ export class ClockComponent {
     if (permission === 'granted') {
       this.showNotificationButton.set(false);
     }
+  }
+
+  onToggleTheme(): void {
+    this.darkModeService.toggleTheme();
+  }
+
+  isDarkMode(): boolean {
+    return this.darkModeService.isDarkMode();
+  }
+
+  onResetToday(): void {
+    const dialogRef = this.alertDialogService.confirm({
+      zTitle: 'Reset Today\'s Data',
+      zDescription: 'Are you sure you want to reset all time tracking data for today? This action cannot be undone.',
+      zOkText: 'Reset',
+      zCancelText: 'Cancel',
+      zOkDestructive: true,
+      zIcon: 'triangle-alert',
+      zOnOk: () => {
+        this.timeTracking.resetTodayData();
+      }
+    });
   }
 
   ngOnDestroy(): void {

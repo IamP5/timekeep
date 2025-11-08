@@ -1,6 +1,7 @@
-import { Component, signal, inject } from '@angular/core';
+import { Component, signal, inject, OnInit } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 import { NotificationService } from './core/services/notification.service';
+import { DarkModeService } from './core/services/dark-mode.service';
 
 @Component({
   selector: 'app-root',
@@ -8,9 +9,15 @@ import { NotificationService } from './core/services/notification.service';
   templateUrl: './app.html',
   styleUrl: './app.css'
 })
-export class App {
+export class App implements OnInit {
   protected readonly title = signal('timekeep');
 
-  // Initialize notification service to start monitoring work hours
+  // Initialize services
   private notificationService = inject(NotificationService);
+  private darkModeService = inject(DarkModeService);
+
+  ngOnInit(): void {
+    // Initialize dark mode theme on app startup
+    this.darkModeService.initTheme();
+  }
 }
