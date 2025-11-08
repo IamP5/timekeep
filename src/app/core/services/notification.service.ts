@@ -1,8 +1,11 @@
 import { Injectable, effect, inject, afterNextRender } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
 import { SwPush } from '@angular/service-worker';
 import { WINDOW } from '../tokens/browser.tokens';
 import { WORK_HOURS_CONFIG, millisecondsToHours } from '../config/work-hours.config';
 import { TimeTrackingService } from './time-tracking.service';
+import { environment } from '../../../environments/environment';
+import { firstValueFrom } from 'rxjs';
 
 const PERMISSION_STORAGE_KEY = 'timekeep_notification_permission';
 const PERMISSION_REQUESTED_KEY = 'timekeep_notification_requested';
@@ -13,6 +16,7 @@ const PERMISSION_REQUESTED_KEY = 'timekeep_notification_requested';
 export class NotificationService {
   private readonly window = inject(WINDOW);
   private readonly swPush = inject(SwPush);
+  private readonly http = inject(HttpClient);
   private readonly timeTracking = inject(TimeTrackingService);
   private readonly workHoursConfig = inject(WORK_HOURS_CONFIG);
 
@@ -20,6 +24,7 @@ export class NotificationService {
   private targetReachedNotificationShown = false;
   private checkInterval: any;
   private permissionGranted = false;
+  private readonly vapidPublicKey = environment.vapidPublicKey;
 
   constructor() {
     // Monitor work time and show notification (effect must be in constructor - injection context)
@@ -143,6 +148,8 @@ export class NotificationService {
     if (NotificationAPI.permission === 'granted') {
       this.permissionGranted = true;
       this.storePermission('granted');
+      /* Subscribe to push notifications with VAPID */
+      await this.subscribeToPushNotifications();
       return 'granted';
     }
 
@@ -160,6 +167,9 @@ export class NotificationService {
       if (permission === 'granted') {
         this.permissionGranted = true;
         this.storePermission('granted');
+
+        /* Subscribe to push notifications with VAPID */
+        await this.subscribeToPushNotifications();
 
         // Show a test notification on iOS to confirm it works
         if (isIOS && isStandalone) {
@@ -181,6 +191,22 @@ export class NotificationService {
         });
       }
       return 'denied';
+    }
+  }
+
+  /* Subscribe to Web Push Notifications using VAPID */
+  async subscribeToPushNotifications(): Promise<void> {
+    try {
+      const subscription = await this.swPush.requestSubscription({
+        serverPublicKey: this.vapidPublicKey
+      });
+
+      /* Send subscription to backend API */
+      await firstValueFrom(this.http.post('/api/push-subscriptions', subscription));
+
+      console.log('[Push Notifications] ✓ Successfully subscribed to push notifications');
+    } catch (error) {
+      console.error('[Push Notifications] ❌ Failed to subscribe:', error);
     }
   }
 

@@ -6,12 +6,33 @@ import {
 } from '@angular/ssr/node';
 import express from 'express';
 import compression from 'compression';
+import webpush from 'web-push';
 import { join } from 'node:path';
 
 const browserDistFolder = join(import.meta.dirname, '../browser');
 
 const app = express();
 const angularApp = new AngularNodeAppEngine();
+
+/* Load VAPID configuration from environment variables */
+const vapidPublicKey = process.env['VAPID_PUBLIC_KEY'];
+const vapidPrivateKey = process.env['VAPID_PRIVATE_KEY'];
+const vapidEmail = process.env['VAPID_EMAIL'];
+
+if (vapidPublicKey && vapidPrivateKey && vapidEmail) {
+  webpush.setVapidDetails(
+    vapidEmail,
+    vapidPublicKey,
+    vapidPrivateKey
+  );
+  console.log('[Push Notifications] ✓ VAPID keys configured successfully from environment');
+} else {
+  console.warn('[Push Notifications] ⚠️ VAPID configuration missing from environment variables');
+  console.warn('  Required: VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_EMAIL');
+}
+
+/* In-memory storage for push subscriptions (use database in production) */
+const pushSubscriptions = new Map<string, any>();
 
 /**
  * Security and Performance middleware
@@ -38,16 +59,87 @@ app.use((req, res, next) => {
 });
 
 /**
- * Example Express Rest API endpoints can be defined here.
- * Uncomment and define endpoints as necessary.
- *
- * Example:
- * ```ts
- * app.get('/api/{*splat}', (req, res) => {
- *   // Handle API request
- * });
- * ```
+ * Push Notification API Endpoints
  */
+
+/* Store a push subscription */
+app.post('/api/push-subscriptions', express.json(), (req, res) => {
+  const subscription = req.body;
+
+  if (!subscription || !subscription.endpoint) {
+    res.status(400).json({ error: 'Invalid subscription object' });
+    return;
+  }
+
+  /* Use endpoint as unique key */
+  const key = subscription.endpoint;
+  pushSubscriptions.set(key, subscription);
+
+  console.log('[Push API] ✓ Subscription stored. Total subscriptions:', pushSubscriptions.size);
+
+  res.status(201).json({ message: 'Subscription stored successfully' });
+});
+
+/* Send push notification to all subscribers */
+app.post('/api/send-push-notification', express.json(), (req, res) => {
+  const { title, body, icon, data } = req.body;
+
+  if (!title || !body) {
+    res.status(400).json({ error: 'Title and body are required' });
+    return;
+  }
+
+  const notificationPayload = {
+    notification: {
+      title,
+      body,
+      icon: icon || '/icons/icon-192x192.png',
+      badge: '/icons/icon-96x96.png',
+      vibrate: [100, 50, 100],
+      data: data || {
+        dateOfArrival: Date.now(),
+        primaryKey: 1
+      },
+      actions: [{
+        action: 'explore',
+        title: 'Open TimeKeep'
+      }]
+    }
+  };
+
+  console.log('[Push API] Sending notification to', pushSubscriptions.size, 'subscribers');
+
+  const allSubscriptions = Array.from(pushSubscriptions.values());
+
+  Promise.all(
+    allSubscriptions.map(sub =>
+      webpush.sendNotification(sub, JSON.stringify(notificationPayload))
+        .catch((err: any) => {
+          console.error('[Push API] Failed to send to subscription:', err);
+          /* Remove invalid subscriptions */
+          if (err.statusCode === 410) {
+            pushSubscriptions.delete(sub.endpoint);
+          }
+        })
+    )
+  )
+    .then(() => {
+      console.log('[Push API] ✓ Notifications sent successfully');
+      res.status(200).json({
+        message: 'Notifications sent successfully',
+        sent: allSubscriptions.length
+      });
+    })
+    .catch((err: any) => {
+      console.error('[Push API] ❌ Error sending notifications:', err);
+      res.status(500).json({ error: 'Failed to send notifications' });
+    });
+});
+
+/* Get subscription count (for debugging) */
+app.get('/api/push-subscriptions/count', (req, res) => {
+  res.json({ count: pushSubscriptions.size });
+});
 
 /**
  * Serve static files from /browser with optimized caching

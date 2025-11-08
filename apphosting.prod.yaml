@@ -1,0 +1,14 @@
+runConfig:
+  cpu: 1
+  memoryMiB: 256
+  maxInstances: 2
+  minInstances: 0
+  concurrency: 5
+
+env:
+  - variable: VAPID_PUBLIC_KEY
+    value: BOdm95CftBpw_zd3pcXReNFLMwVbKh93FU-I44_k1YWi2TbVbyZKnaDcUrwOkDNEURuqOOYyYaUlz_PI8vI3jf0
+  - variable: VAPID_EMAIL
+    value: mailto:noreply@timekeep.app
+  - variable: VAPID_PRIVATE_KEY
+    secret: vapidPrivateKey
