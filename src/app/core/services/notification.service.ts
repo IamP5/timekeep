@@ -8,7 +8,6 @@ import { environment } from '../../../environments/environment';
 import { firstValueFrom } from 'rxjs';
 
 const PERMISSION_STORAGE_KEY = 'timekeep_notification_permission';
-const PERMISSION_REQUESTED_KEY = 'timekeep_notification_requested';
 
 @Injectable({
   providedIn: 'root'
@@ -54,14 +53,11 @@ export class NotificationService {
   }
 
   private async initNotifications(): Promise<void> {
-    // Check if notifications are supported
-    if (!this.window || !('Notification' in this.window)) {
+    // Check if push notifications are supported via SwPush
+    if (!this.swPush.isEnabled) {
+      console.warn('[Notifications] Push notifications not supported');
       return;
     }
-
-    // Detect iOS and PWA mode
-    const isIOS = this.isIOS();
-    const isStandalone = this.isStandalone();
 
     // Check stored permission
     const storedPermission = this.getStoredPermission();
@@ -70,20 +66,10 @@ export class NotificationService {
     }
 
     // Check current permission without prompting
-    const NotificationAPI = this.window.Notification as typeof Notification;
-
-    if (NotificationAPI.permission === 'granted') {
+    const currentPermission = this.getPermissionState();
+    if (currentPermission === 'granted') {
       this.permissionGranted = true;
       this.storePermission('granted');
-    }
-
-    // Wait for service worker on iOS PWA
-    if (isIOS && isStandalone && 'serviceWorker' in navigator) {
-      try {
-        await navigator.serviceWorker.ready;
-      } catch (error) {
-        console.error('[Notifications] Service Worker not ready:', error);
-      }
     }
 
     // Start periodic check for work hours
@@ -113,17 +99,22 @@ export class NotificationService {
     this.window.localStorage.setItem(PERMISSION_STORAGE_KEY, permission);
   }
 
-  private hasRequestedPermission(): boolean {
-    if (!this.window) return false;
-    return this.window.localStorage.getItem(PERMISSION_REQUESTED_KEY) === 'true';
-  }
+  /* Get current notification permission state */
+  getPermissionState(): NotificationPermission {
+    if (!this.swPush.isEnabled) return 'denied';
+    if (!this.window || !('Notification' in this.window)) return 'denied';
 
-  private markPermissionRequested(): void {
-    if (!this.window) return;
-    this.window.localStorage.setItem(PERMISSION_REQUESTED_KEY, 'true');
+    const NotificationAPI = this.window.Notification as typeof Notification;
+    return NotificationAPI.permission;
   }
 
   async requestPermission(): Promise<NotificationPermission> {
+    // Check if push notifications are supported
+    if (!this.swPush.isEnabled) {
+      console.warn('[Notifications] ❌ Push notifications not supported');
+      return 'denied';
+    }
+
     if (!this.window || !('Notification' in this.window)) {
       return 'denied';
     }
@@ -131,21 +122,10 @@ export class NotificationService {
     const isIOS = this.isIOS();
     const isStandalone = this.isStandalone();
 
-    // For iOS PWA, ensure service worker is ready first
-    if (isIOS && isStandalone && 'serviceWorker' in navigator) {
-      try {
-        await navigator.serviceWorker.ready;
-      } catch (error) {
-        console.error('[Notifications] iOS PWA - Service Worker not ready:', error);
-        alert('Please wait for the app to fully load and try again.');
-        return 'denied';
-      }
-    }
+    // Check current permission state
+    const currentPermission = this.getPermissionState();
 
-    // Access Notification from the global window object
-    const NotificationAPI = this.window.Notification as typeof Notification;
-
-    if (NotificationAPI.permission === 'granted') {
+    if (currentPermission === 'granted') {
       this.permissionGranted = true;
       this.storePermission('granted');
       /* Subscribe to push notifications with VAPID */
@@ -153,7 +133,7 @@ export class NotificationService {
       return 'granted';
     }
 
-    if (NotificationAPI.permission === 'denied') {
+    if (currentPermission === 'denied') {
       console.warn('[Notifications] ❌ Permission previously denied');
       if (isIOS && !isStandalone) {
         alert('Notifications only work when the app is installed to your home screen. Please add TimeKeep to your home screen and grant permission there.');
@@ -162,6 +142,8 @@ export class NotificationService {
     }
 
     try {
+      // Access Notification from the global window object to request permission
+      const NotificationAPI = this.window.Notification as typeof Notification;
       const permission = await NotificationAPI.requestPermission();
 
       if (permission === 'granted') {
@@ -173,7 +155,7 @@ export class NotificationService {
 
         // Show a test notification on iOS to confirm it works
         if (isIOS && isStandalone) {
-          setTimeout(() => this.showTestNotification(), 500);
+          setTimeout(() => this.sendTestNotification(), 500);
         }
       } else {
         this.storePermission(permission);
@@ -187,7 +169,7 @@ export class NotificationService {
         console.error('[Notifications] iOS Error details:', {
           error,
           isStandalone,
-          serviceWorkerReady: navigator.serviceWorker?.controller !== null
+          pushEnabled: this.swPush.isEnabled
         });
       }
       return 'denied';
@@ -205,25 +187,53 @@ export class NotificationService {
       await firstValueFrom(this.http.post('/api/push-subscriptions', subscription));
 
       console.log('[Push Notifications] ✓ Successfully subscribed to push notifications');
+
+      /* Listen for push notification messages */
+      this.swPush.messages.subscribe((message) => {
+        console.log('[Push Notifications] Received message:', message);
+      });
+
+      /* Listen for notification clicks */
+      this.swPush.notificationClicks.subscribe(({ action, notification }) => {
+        console.log('[Push Notifications] Notification clicked:', action, notification);
+        // Navigate to the app when notification is clicked
+        if (this.window) {
+          this.window.focus();
+        }
+      });
     } catch (error) {
       console.error('[Push Notifications] ❌ Failed to subscribe:', error);
     }
   }
 
-  private async showTestNotification(): Promise<void> {
+  /* Send a push notification via the server API */
+  private async sendPushNotification(title: string, body: string, data?: any): Promise<void> {
     try {
-      if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification('TimeKeep', {
-          body: 'Notifications are enabled! You\'ll receive work hour alerts.',
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-96x96.png',
-          tag: 'test-notification',
-          requireInteraction: false
-        } as NotificationOptions);
-      }
+      await firstValueFrom(this.http.post('/api/send-push-notification', {
+        title,
+        body,
+        icon: '/icons/icon-192x192.png',
+        data: data || { url: '/' }
+      }));
+
+      console.log('[Push Notifications] ✓ Notification sent via server');
     } catch (error) {
-      console.error('[Notifications] Failed to show test notification:', error);
+      console.error('[Push Notifications] ❌ Failed to send notification via server:', error);
+      throw error;
+    }
+  }
+
+  /* Send a test notification via server to confirm setup */
+  private async sendTestNotification(): Promise<void> {
+    try {
+      await this.sendPushNotification(
+        'TimeKeep',
+        'Notifications are enabled! You\'ll receive work hour alerts.',
+        { url: '/' }
+      );
+      console.log('[Notifications] ✓ Test notification sent');
+    } catch (error) {
+      console.error('[Notifications] ❌ Failed to send test notification:', error);
     }
   }
 
@@ -243,37 +253,12 @@ export class NotificationService {
       : `${minutesRemaining} minutes`;
 
     try {
-      // Try to use Service Worker notification first (better for PWA)
-      if (this.swPush.isEnabled && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification('TimeKeep - Work Hours Alert', {
-          body: `You've worked ${timeText}. Almost at your ${targetHours.toFixed(2)} hours target!`,
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-96x96.png',
-          tag: 'work-hours-alert',
-          requireInteraction: false,
-          silent: false,
-          data: { url: '/' }
-        } as NotificationOptions);
-      } else {
-        // Fallback to regular notification
-        if (!this.window || !('Notification' in this.window)) return;
-
-        const NotificationAPI = this.window.Notification as typeof Notification;
-        const notification = new NotificationAPI('TimeKeep - Work Hours Alert', {
-          body: `You've worked ${timeText}. Almost at your ${targetHours.toFixed(2)} hours target!`,
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-96x96.png',
-          tag: 'work-hours-alert',
-          requireInteraction: false,
-          silent: false
-        });
-
-        notification.onclick = () => {
-          this.window?.focus();
-          notification.close();
-        };
-      }
+      // Send notification via server-side push API
+      await this.sendPushNotification(
+        'TimeKeep - Work Hours Alert',
+        `You've worked ${timeText}. Almost at your ${targetHours.toFixed(2)} hours target!`,
+        { url: '/' }
+      );
 
       this.notificationShown = true;
     } catch (error) {
@@ -291,26 +276,12 @@ export class NotificationService {
     }
 
     try {
-      if (this.swPush.isEnabled && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification('TimeKeep', {
-          body: 'Clocked in successfully! Have a productive day.',
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-96x96.png',
-          tag: 'clock-in',
-          requireInteraction: false,
-          data: { url: '/' }
-        } as NotificationOptions);
-      } else if (this.window && 'Notification' in this.window) {
-        const NotificationAPI = this.window.Notification as typeof Notification;
-        new NotificationAPI('TimeKeep', {
-          body: 'Clocked in successfully! Have a productive day.',
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-96x96.png',
-          tag: 'clock-in',
-          requireInteraction: false
-        });
-      }
+      // Send notification via server-side push API
+      await this.sendPushNotification(
+        'TimeKeep',
+        'Clocked in successfully! Have a productive day.',
+        { url: '/' }
+      );
     } catch (error) {
       console.error('[Notifications] Error showing clock in notification:', error);
     }
@@ -321,26 +292,12 @@ export class NotificationService {
 
     try {
       const hours = hoursWorked.toFixed(2);
-      if (this.swPush.isEnabled && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification('TimeKeep', {
-          body: `Clocked out! You worked ${hours} hours today.`,
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-96x96.png',
-          tag: 'clock-out',
-          requireInteraction: false,
-          data: { url: '/' }
-        } as NotificationOptions);
-      } else if (this.window && 'Notification' in this.window) {
-        const NotificationAPI = this.window.Notification as typeof Notification;
-        new NotificationAPI('TimeKeep', {
-          body: `Clocked out! You worked ${hours} hours today.`,
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-96x96.png',
-          tag: 'clock-out',
-          requireInteraction: false
-        });
-      }
+      // Send notification via server-side push API
+      await this.sendPushNotification(
+        'TimeKeep',
+        `Clocked out! You worked ${hours} hours today.`,
+        { url: '/' }
+      );
     } catch (error) {
       console.error('[Notifications] Error showing clock out notification:', error);
     }
@@ -398,26 +355,12 @@ export class NotificationService {
     const targetHours = this.workHoursConfig.targetHours;
 
     try {
-      if (this.swPush.isEnabled && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
-        const registration = await navigator.serviceWorker.ready;
-        await registration.showNotification(`TimeKeep - ${targetHours} Hours Reached!`, {
-          body: `You've completed your ${targetHours}-hour workday! Don't forget to clock out.`,
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-96x96.png',
-          tag: 'target-reached',
-          requireInteraction: true,
-          data: { url: '/' }
-        } as NotificationOptions);
-      } else if (this.window && 'Notification' in this.window) {
-        const NotificationAPI = this.window.Notification as typeof Notification;
-        new NotificationAPI(`TimeKeep - ${targetHours} Hours Reached!`, {
-          body: `You've completed your ${targetHours}-hour workday! Don't forget to clock out.`,
-          icon: '/icons/icon-192x192.png',
-          badge: '/icons/icon-96x96.png',
-          tag: 'target-reached',
-          requireInteraction: true
-        });
-      }
+      // Send notification via server-side push API
+      await this.sendPushNotification(
+        `TimeKeep - ${targetHours} Hours Reached!`,
+        `You've completed your ${targetHours}-hour workday! Don't forget to clock out.`,
+        { url: '/' }
+      );
     } catch (error) {
       console.error('[Notifications] Error showing target reached notification:', error);
     }

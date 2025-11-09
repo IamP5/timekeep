@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { SwPush } from '@angular/service-worker';
 import { TimeTrackingService } from '@app/core/services/time-tracking.service';
 import { NotificationService } from '@app/core/services/notification.service';
 import { DarkModeService } from '@app/core/services/dark-mode.service';
@@ -25,6 +26,7 @@ import { WINDOW } from '@app/core/tokens/browser.tokens';
 })
 export class ClockComponent {
   private readonly window = inject(WINDOW);
+  private readonly swPush = inject(SwPush);
   private timeTracking = inject(TimeTrackingService);
   private notificationService = inject(NotificationService);
   private darkModeService = inject(DarkModeService);
@@ -113,9 +115,10 @@ export class ClockComponent {
     // This is required for iOS PWA compatibility
 
     // Show notification button for manual permission request (helpful for iOS)
-    if (this.window && 'Notification' in this.window) {
-      const NotificationAPI = this.window.Notification as typeof Notification;
-      if (NotificationAPI.permission === 'default') {
+    // Check if push notifications are supported and permission hasn't been granted yet
+    if (this.swPush.isEnabled) {
+      const permissionState = this.notificationService.getPermissionState();
+      if (permissionState === 'default') {
         this.showNotificationButton.set(true);
       }
     }
